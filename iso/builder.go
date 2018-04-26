@@ -5,7 +5,7 @@ import (
 	"github.com/hashicorp/packer/packer"
 	"github.com/jetbrains-infra/packer-builder-vsphere/common"
 	"github.com/jetbrains-infra/packer-builder-vsphere/driver"
-	"github.com/mitchellh/multistep"
+	"github.com/hashicorp/packer/helper/multistep"
 	"github.com/hashicorp/packer/helper/communicator"
 )
 
@@ -49,10 +49,10 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 		&StepAddFloppy{
 			Config:    &b.config.FloppyConfig,
 			Datastore: b.config.Datastore,
-			Host: b.config.Host,
+			Host:      b.config.Host,
 		},
 		&StepConfigParams{
-			Config:    &b.config.ConfigParamsConfig,
+			Config: &b.config.ConfigParamsConfig,
 		},
 	)
 
@@ -78,6 +78,11 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 	}
 
 	steps = append(steps,
+		&StepRemoveCDRom{},
+		&StepRemoveFloppy{
+			Datastore: b.config.Datastore,
+			Host:      b.config.Host,
+		},
 		&common.StepCreateSnapshot{
 			CreateSnapshot: b.config.CreateSnapshot,
 		},

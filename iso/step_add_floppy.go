@@ -1,11 +1,11 @@
 package iso
 
 import (
-	"github.com/mitchellh/multistep"
+	"github.com/hashicorp/packer/helper/multistep"
 	"github.com/hashicorp/packer/packer"
 	"github.com/jetbrains-infra/packer-builder-vsphere/driver"
 	"fmt"
-	"github.com/vmware/govmomi/vim25/types"
+	"context"
 )
 
 type FloppyConfig struct {
@@ -29,12 +29,10 @@ func (c *FloppyConfig) Prepare() []error {
 type StepAddFloppy struct {
 	Config    *FloppyConfig
 	Datastore string
-	Host string
-
-	uploadedFloppyPath string
+	Host      string
 }
 
-func (s *StepAddFloppy) Run(state multistep.StateBag) multistep.StepAction {
+func (s *StepAddFloppy) Run(_ context.Context, state multistep.StateBag) multistep.StepAction {
 	err := s.runImpl(state)
 	if err != nil {
 		state.Put("error", fmt.Errorf("error adding floppy: %v", err))
@@ -65,9 +63,8 @@ func (s *StepAddFloppy) runImpl(state multistep.StateBag) error {
 		if err := ds.UploadFile(tmpFloppy.(string), uploadPath); err != nil {
 			return fmt.Errorf("error uploading floppy image: %v", err)
 		}
+		state.Put("uploaded_floppy_path", uploadPath)
 
-		// remember the path to the temporary floppy image to remove it after the build is finished
-		s.uploadedFloppyPath = uploadPath
 		floppyIMGPath := ds.ResolvePath(uploadPath)
 		ui.Say("Adding generated Floppy...")
 		err = vm.AddFloppy(floppyIMGPath)
@@ -88,29 +85,4 @@ func (s *StepAddFloppy) runImpl(state multistep.StateBag) error {
 	return nil
 }
 
-func (s *StepAddFloppy) Cleanup(state multistep.StateBag) {
-	ui := state.Get("ui").(packer.Ui)
-	vm := state.Get("vm").(*driver.VirtualMachine)
-	d := state.Get("driver").(*driver.Driver)
-
-	devices, err := vm.Devices()
-	if err != nil {
-		ui.Error(fmt.Sprintf("error removing floppy: %v", err))
-	}
-	cdroms := devices.SelectByType((*types.VirtualFloppy)(nil))
-	if err = vm.RemoveDevice(false, cdroms...); err != nil {
-		ui.Error(fmt.Sprintf("error removing floppy: %v", err))
-	}
-
-	if s.uploadedFloppyPath != "" {
-		ds, err := d.FindDatastore(s.Datastore, s.Host)
-		if err != nil {
-			ui.Error(err.Error())
-			return
-		}
-		if err := ds.Delete(s.uploadedFloppyPath); err != nil {
-			ui.Error(fmt.Sprintf("Error deleting floppy image '%v': %v", s.uploadedFloppyPath, err.Error()))
-			return
-		}
-	}
-}
+func (s *StepAddFloppy) Cleanup(state multistep.StateBag) {}
